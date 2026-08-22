@@ -12,8 +12,17 @@ own agent at this repository and have it adapt the code and deployment templates
 to what you have. That is usually faster and safer than copying this deployment
 verbatim, and it is how the code got here.
 
-Home Media Center provides browser-based management and playback for a
-self-hosted media disk.
+## About
+
+Home Media Center is a self-hosted, browser-based interface for organizing,
+browsing, managing and playing a mixed media collection. It combines a small
+Python web application and local SQLite catalog with Jellyfin's mature playback
+pipeline, while keeping the custom interface and metadata workflow independent.
+
+It is designed for a household rather than as a hosted multi-tenant service.
+Media browsing is read-only by default, administrative file operations pass
+through a narrowly scoped helper, and normal browsing continues to work from
+locally stored metadata without depending on an external metadata service.
 
 The application exposes read-only media libraries and a separate guarded
 administrator. Destructive actions require explicit confirmation. The
