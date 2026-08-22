@@ -15,7 +15,7 @@ verbatim, and it is how the code got here.
 Home Media Center provides browser-based management and playback for a
 self-hosted media disk.
 
-The application exposes three read-only libraries (`amintiri`, `audio`, `video`) and a separate guarded administrator. Destructive actions require explicit name confirmation. The SQLite catalog and derived metadata live on SSD-backed container storage; media remains on the IronWolf HDD.
+The application exposes read-only libraries and a separate guarded administrator. Destructive actions require explicit name confirmation. The SQLite catalog and derived metadata live on SSD-backed container storage; media remains on the IronWolf HDD.
 
 Movie and episode matching, ratings, genres and cast use IMDb identifiers and contributor datasets. Imported synopses are stored in the local catalog together with their source URL and retrieval date, so normal browsing does not depend on an external service.
 
