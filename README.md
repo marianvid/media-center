@@ -1,9 +1,9 @@
 # Home Media Center
 
-> **Work in progress, built for personal use.** This is a self-hosted tool built
-> around one particular media collection and home-lab. It is public because the
-> approach may be useful to someone; it is not a product and comes without a
-> promise that every environment will work unchanged.
+> **Built for personal use.** This is a self-hosted tool built around one
+> particular media collection and home-lab. It is public because the approach
+> may be useful to someone; it is a starting point rather than a supported
+> product or a promise that every environment will work unchanged.
 
 **This was written with an AI agent, and it is meant to be read the same way.**
 Treat it as a starting point rather than a universal installer. Your storage,
