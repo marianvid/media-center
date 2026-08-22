@@ -24,13 +24,9 @@ Movie and episode matching, ratings, genres and cast use IMDb identifiers and co
 
 ## Screenshots
 
-### Filtered video catalog
+### Memories catalog
 
-![Light theme video catalog with genre and decade filters](docs/screenshots/video-catalog-light.jpg)
-
-### Local metadata and playback
-
-![Light theme movie details with synopsis, cast and playback](docs/screenshots/movie-details-light.jpg)
+![Light theme Memories catalog grouped into year folders](docs/screenshots/memories-catalog-light.jpg)
 
 ## What it provides
 
