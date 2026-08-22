@@ -1,0 +1,17 @@
+[Unit]
+Description=Restricted Media Center administrative helper
+After=mnt-media.mount
+
+[Service]
+Type=simple
+ExecStart=/usr/local/sbin/media-admin
+Restart=always
+RestartSec=2
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/mnt/media /var/lib/media-center-bridge/admin
+
+[Install]
+WantedBy=multi-user.target

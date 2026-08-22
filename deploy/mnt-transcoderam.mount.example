@@ -1,0 +1,12 @@
+[Unit]
+Description=RAM-backed Jellyfin transcode cache
+Before=pve-container@<container-id>.service
+
+[Mount]
+What=tmpfs
+Where=/mnt/transcoderam
+Type=tmpfs
+Options=rw,nosuid,nodev,noexec,size=<cache-size>,mode=0750,uid=<mapped-uid>,gid=<mapped-gid>
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="ro">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Home Media Center</title>
+  <script>
+    (() => {
+      try {
+        const saved = localStorage.getItem('mediaTheme');
+        document.documentElement.dataset.theme = saved || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      } catch {
+        document.documentElement.dataset.theme = 'dark';
+      }
+    })();
+  </script>
+  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="/static/catalog.css?v=11">
+</head>
+<body>
+  <aside>
+    <div class="brand"><span class="brand-mark">◆</span><div><strong>HOME MEDIA</strong><small>IronWolf Library</small></div></div>
+    <nav>
+      <button data-section="amintiri" class="active">Amintiri</button>
+      <button data-section="audio">Audio</button>
+      <button data-section="video">Video</button>
+      <div class="nav-separator"></div>
+      <button data-section="admin">Admin</button>
+      <button data-section="info">Info</button>
+    </nav>
+    <div id="library-filters" class="sidebar-filters hidden">
+      <div class="nav-separator"></div>
+      <button id="reset-library-filters" class="filter-reset" type="button">Show all</button>
+      <div id="genre-filter-section">
+        <h2>Genres</h2>
+        <div id="genre-filters" class="filter-list"></div>
+      </div>
+      <h2 id="date-filter-title">Years</h2>
+      <div id="date-filters" class="filter-list"></div>
+    </div>
+    <div id="sidebar-resizer" role="separator" aria-label="Resize sidebar" aria-orientation="vertical" tabindex="0"></div>
+  </aside>
+  <button id="theme-toggle" class="theme-toggle secondary" type="button" aria-label="Switch theme" title="Switch theme">
+    <svg class="theme-icon theme-sun" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"/></svg>
+    <svg class="theme-icon theme-moon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+  </button>
+  <main>
+    <header>
+      <div><p id="eyebrow">LIBRARY</p><h1 id="title">Amintiri</h1><div id="breadcrumbs" class="breadcrumbs"></div></div>
+      <div class="header-actions">
+        <input id="search" type="search" placeholder="Search title, genre, actor…">
+        <div id="admin-actions" class="hidden">
+          <button id="admin-new-folder" class="secondary" type="button">New folder</button>
+          <button id="admin-upload" class="secondary" type="button">Upload files</button>
+          <input id="admin-file-input" type="file" multiple hidden>
+          <button id="admin-refresh" class="secondary" type="button">Refresh indexes</button>
+        </div>
+        <button id="view-toggle" class="secondary">Catalog</button>
+        <button id="refresh" class="secondary">Refresh</button>
+      </div>
+    </header>
+    <section id="content" class="content list-view"></section>
+  </main>
+  <section id="movie-page" class="movie-page hidden" aria-label="Movie details">
+    <button class="movie-page-close" type="button">← Back to library</button>
+    <div class="movie-page-layout">
+      <div class="movie-media">
+        <div class="movie-poster" aria-hidden="true"></div>
+        <div class="movie-actions"><button class="movie-play" type="button">Play</button></div>
+      </div>
+      <div class="movie-page-copy">
+        <p class="movie-kicker">MOVIE DETAILS</p>
+        <h2 class="movie-title"></h2>
+        <div class="movie-badges"></div>
+        <div class="movie-synopsis"></div>
+        <dl class="movie-facts"></dl>
+        <p class="movie-source hidden"></p>
+      </div>
+    </div>
+  </section>
+  <div id="viewer" class="viewer hidden">
+    <button class="viewer-close">×</button><button class="viewer-prev">‹</button>
+    <div class="viewer-body"></div><button class="viewer-next">›</button>
+    <div class="viewer-caption"></div>
+  </div>
+  <dialog id="confirm-dialog"><form method="dialog"><h2>Confirm destructive action</h2><p id="confirm-text"></p><input id="confirm-input"><div><button value="cancel" class="secondary">Cancel</button><button value="confirm" class="danger">Delete permanently</button></div></form></dialog>
+  <dialog id="folder-dialog"><form method="dialog"><h2>Create folder</h2><label>Name<input id="folder-name" required maxlength="255"></label><div><button value="cancel" class="secondary">Cancel</button><button value="confirm">Create</button></div></form></dialog>
+  <dialog id="admin-dialog"><form id="admin-form"><h2 id="admin-dialog-title">Manage media</h2><p id="admin-item-path" class="dialog-path"></p><fieldset><legend>File</legend><label>Name<input id="admin-name" required maxlength="255"></label><label>Move to folder<input id="admin-destination" readonly></label><div class="inline-actions"><button id="admin-rename-action" type="button" class="secondary">Rename</button><button id="admin-choose-folder" type="button" class="secondary">Choose folder</button><button id="admin-move-action" type="button" class="secondary">Move here</button></div><div id="admin-folder-picker" class="hidden"><div id="admin-folder-crumbs" class="breadcrumbs"></div><div id="admin-folder-list" class="folder-picker-list"></div><button id="admin-use-folder" type="button">Use this folder</button></div></fieldset><fieldset id="metadata-fields"><legend>Catalog information</legend><div class="form-grid"><label>Title<input id="metadata-title" maxlength="500"></label><label>Year<input id="metadata-year" type="number" min="1800" max="2200"></label><label>IMDb ID<input id="metadata-imdb" placeholder="tt1234567"></label><label>IMDb rating<input id="metadata-rating" type="number" min="0" max="10" step="0.1"></label></div><label>Genres<input id="metadata-genres"></label><label>Actors<textarea id="metadata-actors" rows="2"></textarea></label><label>Synopsis<textarea id="metadata-synopsis" rows="7"></textarea></label><button id="metadata-save" type="button">Save catalog information</button></fieldset><p id="admin-dialog-status" class="dialog-status"></p><div><button id="admin-delete-action" type="button" class="danger">Delete…</button><span class="dialog-spacer"></span><button id="admin-close-action" type="button" class="secondary">Close</button></div></form></dialog>
+  <div id="admin-transfer" class="admin-transfer hidden"><strong>Upload</strong><span></span><progress max="100" value="0"></progress></div>
+  <script src="/static/hls.min.js?v=1.6.16"></script>
+  <script src="/static/app.js?v=22"></script>
+</body>
+</html>

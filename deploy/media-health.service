@@ -1,0 +1,6 @@
+[Unit]
+Description=Publish media HDD SMART health for Media Center
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/media-health
