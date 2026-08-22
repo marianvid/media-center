@@ -15,18 +15,31 @@ verbatim, and it is how the code got here.
 Home Media Center provides browser-based management and playback for a
 self-hosted media disk.
 
-The application exposes read-only libraries and a separate guarded administrator. Destructive actions require explicit name confirmation. The SQLite catalog and derived metadata live on SSD-backed container storage; media remains on the IronWolf HDD.
+The application exposes read-only media libraries and a separate guarded
+administrator. Destructive actions require explicit confirmation. The
+SQLite catalog and derived metadata use persistent application storage while
+the original media remains on separately mounted source storage.
 
 Movie and episode matching, ratings, genres and cast use IMDb identifiers and contributor datasets. Imported synopses are stored in the local catalog together with their source URL and retrieval date, so normal browsing does not depend on an external service.
+
+## Screenshots
+
+### Filtered video catalog
+
+![Light theme video catalog with genre and decade filters](docs/screenshots/video-catalog-light.jpg)
+
+### Local metadata and playback
+
+![Light theme movie details with synopsis, cast and playback](docs/screenshots/movie-details-light.jpg)
 
 ## What it provides
 
 - folder and catalog views for mixed photo/video memories;
 - persistent light/dark appearance with a system-theme default;
 - a resizable, persistent navigation sidebar with media-specific filters;
-- direct HTML5 playback for audio and Amintiri clips with byte-range support;
+- direct HTML5 playback for audio and mixed photo/video collections with byte-range support;
 - Jellyfin HLS playback for the video library, with H.264/AAC stream copy when possible;
-- AMD Radeon 780M hardware transcoding through VA-API for incompatible video codecs;
+- optional AMD hardware transcoding through VA-API for incompatible video codecs;
 - photo previews plus previous/next navigation;
 - title, genre and actor search without a separate actor-grouping view;
 - photo filtering by year, audio filtering by genre and year, and video filtering by genre and decade;
@@ -34,20 +47,20 @@ Movie and episode matching, ratings, genres and cast use IMDb identifiers and co
 - movie, series and episode detail pages with ratings, cast and locally stored synopses;
 - stable `SxxExx` episode labels kept separate from canonical searchable titles;
 - live disk capacity, temperature and essential SMART indicators;
-- complete Admin file management: create folders, direct-to-HDD uploads, rename, move and confirmed delete;
+- complete Admin file management: create folders, direct-to-storage uploads, rename, move and confirmed delete;
 - local catalog editing for title, year, IMDb ID/rating, genres, cast and synopsis;
 - automatic targeted Media Center/Jellyfin refreshes after file changes, plus a manual full refresh;
 - background rescans and IMDb metadata refreshes.
 
 ## Trust boundaries
 
-The web application runs in an unprivileged LXC. All media bind mounts are
-read-only. A small root-owned helper on the Proxmox host accepts only the
+The web application can run in an unprivileged Linux container. Media source
+mounts are read-only. A small root-owned helper on the host accepts only the
 explicit file operations used by Admin: create directory, streamed upload,
 rename, move and confirmed delete. It rejects absolute paths, traversal,
 library-root deletion/rename/move and unsupported actions. It never executes
 shell commands. Uploads are written directly to a hidden temporary file on the
-media HDD, fsynced and atomically exposed under their final name; interrupted
+media storage, fsynced and atomically exposed under their final name; interrupted
 uploads are removed.
 
 SMART data is published by a separate host timer. Both host bridges are exposed
@@ -59,7 +72,7 @@ read-only to the container from `/var/lib/media-center-bridge`.
 - state/catalog: `/var/lib/media-center` in the container;
 - thumbnail and IMDb cache: `/var/cache/media-center`;
 - Jellyfin state and transcode cache: `/var/lib/jellyfin` and `/var/cache/jellyfin`;
-- read-only media source in the container: `/srv/media/readonly/{amintiri,audio,video}`;
+- read-only media sources in the container: `/srv/media/readonly/<library-name>`;
 - application HTTP service: port `9080`;
 - Jellyfin playback service: port `8096`, with a restricted playback-only account;
 - process supervision: `media-center.service` and `jellyfin.service`.
@@ -89,8 +102,10 @@ The Admin view browses the writable media tree without exposing that writable
 mount to the web process. **New folder** creates a directory in the current
 location. **Upload files** supports multiple files and shows per-file progress;
 the browser request is streamed through the Unix socket bridge instead of being
-buffered on the LXC SSD. **Manage** provides rename, move, local metadata editing
-and permanent deletion. Delete still requires typing the exact item name.
+buffered on container storage. **Manage** provides rename, move, local metadata
+editing and permanent deletion. Delete uses a confirmation dialog whose default
+action is **Cancel**; the server still validates the exact target name supplied
+by the interface.
 
 Renaming or moving an indexed item also relocates its existing local catalog
 record and descendants, preserving manually curated metadata. Filesystem
@@ -138,7 +153,8 @@ pytest -q
 The suite covers path confinement, scanner/title parsing, IMDb candidate
 selection, episode numbering and source parsing, photo/audio metadata, the
 restricted host helper and Jellyfin playback selection. Deployment is followed
-by live API, filtering, service, metadata and VA-API playback checks in the LXC.
+by live API, filtering, service, metadata and hardware-playback checks in the
+target environment.
 
 ## IMDb data
 
