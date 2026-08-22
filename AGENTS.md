@@ -10,6 +10,15 @@
 - Runtime credentials must stay outside Git and be supplied through environment
   files or the target platform's secret store.
 
+## Public README convention
+
+- Public personal projects should open with the standard notice used here: the
+  project is work in progress and built for personal use, is shared as a useful
+  starting point rather than a supported product, and may require adaptation.
+- State plainly that the project was written with AI-agent assistance.
+- Recommend pointing the reader's own agent at the repository to adapt the code
+  and deployment templates to their hardware, storage and requirements.
+
 ## Private deployment context
 
 - If `.private-ops/AGENTS.md` exists, read it before deploying or validating an
