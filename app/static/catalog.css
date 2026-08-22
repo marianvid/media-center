@@ -55,6 +55,11 @@ aside {
   outline-offset: 2px;
 }
 
+/* Full-screen media must cover every page-level control, including the theme toggle. */
+.viewer {
+  z-index: 30;
+}
+
 .theme-icon {
   height: 20px;
   width: 20px;
