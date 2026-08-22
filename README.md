@@ -24,9 +24,13 @@ Movie and episode matching, ratings, genres and cast use IMDb identifiers and co
 
 ## Screenshots
 
-### Memories catalog
+### Mixed photo and video memories
 
-![Light theme Memories catalog grouped into year folders](docs/screenshots/memories-catalog-light.jpg)
+![Light theme catalog showing a personal photo collection](docs/screenshots/memories-trip-catalog-light.jpg)
+
+### Locally stored synopsis and playback
+
+![Light theme title details with rating, genres and synopsis](docs/screenshots/popeye-synopsis-light.jpg)
 
 ## What it provides
 
@@ -36,6 +40,7 @@ Movie and episode matching, ratings, genres and cast use IMDb identifiers and co
 - direct HTML5 playback for audio and mixed photo/video collections with byte-range support;
 - Jellyfin HLS playback for the video library, with H.264/AAC stream copy when possible;
 - optional AMD hardware transcoding through VA-API for incompatible video codecs;
+- independent playback sessions for multiple simultaneous home users;
 - photo previews plus previous/next navigation;
 - title, genre and actor search without a separate actor-grouping view;
 - photo filtering by year, audio filtering by genre and year, and video filtering by genre and decade;
@@ -47,6 +52,68 @@ Movie and episode matching, ratings, genres and cast use IMDb identifiers and co
 - local catalog editing for title, year, IMDb ID/rating, genres, cast and synopsis;
 - automatic targeted Media Center/Jellyfin refreshes after file changes, plus a manual full refresh;
 - background rescans and IMDb metadata refreshes.
+
+## Playback pipeline
+
+The browser never asks Jellyfin to search for a filename at playback time. The
+local catalog stores a persistent `jellyfin_item_id` and
+`jellyfin_media_source_id` for every matched video. A playback request resolves
+those IDs in SQLite and opens the corresponding Jellyfin HLS manifest directly.
+This avoids ambiguous matches when separate folders contain files with the same
+name.
+
+Every playback request receives its own Jellyfin device ID and play-session ID,
+so viewers can play, pause and seek independently. There is no application-level
+single-viewer lock. Multiple users can therefore stream at the same time on a
+home network; the practical limit depends on disk throughput, network capacity
+and, most importantly, how many streams require transcoding simultaneously.
+
+For browser-friendly H.264 video and AAC audio, Jellyfin can copy compatible
+streams into HLS without re-encoding them. This uses comparatively little CPU or
+GPU and makes several concurrent streams inexpensive. Incompatible codecs are
+converted to H.264/AAC, optionally through VA-API. Each active transcode consumes
+hardware capacity and its own temporary segment window, so installations should
+be sized and tested for their intended number of concurrent 1080p streams.
+
+## Bounded HLS sliding window
+
+Transcoding does not need to retain a complete converted movie. The supplied
+configuration helper enables Jellyfin throttling and automatic segment deletion:
+
+- transcoding slows down after it has built a useful lead over the viewer;
+- consumed HLS segments are deleted while playback continues;
+- only the active data plus a configurable recent window remains in the
+  transcode directory;
+- interrupted or completed sessions do not become permanent media copies.
+
+The defaults in `scripts/configure_jellyfin_transcoding.py` use a 60-second
+throttle delay and retain 300 seconds of old segments. They are deployment
+defaults, not universal recommendations. The transcode directory may be placed
+on a bounded RAM-backed filesystem to reduce latency and avoid unnecessary SSD
+writes. Persistent data — the SQLite catalogs, metadata and artwork — remains on
+persistent storage.
+
+## Index updates
+
+Media Center and Jellyfin keep separate catalogs, and Jellyfin remains the only
+writer of its own database. The application synchronizes them without modifying
+Jellyfin's tables:
+
+1. Media Center scans filesystem metadata into its local SQLite catalog.
+2. A full physical path is used once to join each local video to Jellyfin's
+   logical item and physical media-source IDs.
+3. Normal playback subsequently uses only those persistent IDs.
+4. Admin add, rename, move and delete operations coalesce into one background
+   job instead of launching overlapping scans.
+5. Video changes request a targeted refresh of the closest known Jellyfin item,
+   then reconcile IDs repeatedly while Jellyfin's asynchronous scan completes.
+6. **Refresh indexes** requests a full Jellyfin library refresh and a complete
+   local rescan when a broader rebuild is wanted.
+
+`POST /api/jobs/jellyfin-sync` can rebuild only the persistent ID mapping from a
+read-only connection to Jellyfin's catalog. Targeted updates keep routine file
+management quick, while the full refresh remains available for recovery or
+out-of-band filesystem changes.
 
 ## Trust boundaries
 
