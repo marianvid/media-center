@@ -51,7 +51,7 @@ case "$mode" in
 esac
 
 if (( failed )); then
-  printf 'public-safety: blocked; move installation-specific data to .private-ops/ and unstage it.\n' >&2
+  printf 'public-safety: blocked; move installation-specific data to opts/ and unstage it.\n' >&2
   exit 1
 fi
 

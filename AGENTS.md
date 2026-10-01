@@ -21,10 +21,10 @@
 
 ## Private deployment context
 
-- If `.private-ops/AGENTS.md` exists, read it before deploying or validating an
+- If `opts/AGENTS.md` exists, read it before deploying or validating an
   application change. It is the separately versioned, private operational
   repository for this installation.
-- `.private-ops/` must remain ignored by this repository. It is not a submodule
+- `opts/` must remain ignored by this repository. It is not a submodule
   and must never be added to the public Git index.
 - If the private context is absent, do not assume a deployment target. Adapt the
   templates to the user's environment and ask for any values that cannot be

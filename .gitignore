@@ -22,7 +22,7 @@ id_rsa*
 id_ed25519*
 
 # Optional, independently versioned private deployment repository.
-/.private-ops/
+/opts/
 
 .idea/
 .vscode/

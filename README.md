@@ -192,7 +192,7 @@ persistent catalog and artwork remain on persistent storage.
 
 Public repository rules are recorded in `AGENTS.md`. Installation-specific
 deployment and verification details belong in the optional, separately versioned
-private operations repository at `.private-ops/`.
+private operations repository at `opts/`.
 
 ## Catalog metadata
 
