@@ -14,7 +14,7 @@ from .admin_client import AdminClient, AdminError
 from .admin_jobs import AdminIndexer
 from .config import settings
 from .db import Database
-from .files import list_directory, ranged_file, subtitle_vtt, thumbnail
+from .files import downloadable, list_directory, ranged_file, subtitle_vtt, thumbnail
 from .episode_sync import episode_label
 from .imdb_sync import ImdbSync
 from .jellyfin import JellyfinClient, JellyfinError
@@ -106,6 +106,12 @@ def stream_media(request: Request, library: str, path: str = Query(...)):
     return ranged_file(target, request)
 
 
+@app.get("/api/download/{library}")
+def download_media(library: str, path: str = Query(...)):
+    target = resolve_library(settings.readonly_root, library, path)
+    return downloadable(target, settings.cache_dir / "downloads")
+
+
 @app.get("/api/thumbnail/{library}")
 def media_thumbnail(library: str, path: str = Query(...), size: int = Query(480, ge=96, le=1200)):
     target = resolve_library(settings.readonly_root, library, path)
@@ -117,7 +123,7 @@ def media_subtitle(library: str, path: str = Query(...)):
     target = resolve_library(settings.readonly_root, library, path)
     if not target.is_file():
         raise HTTPException(400, "Not a file")
-    return subtitle_vtt(target, settings.cache_dir)
+    return subtitle_vtt(target, settings.cache_dir, settings.state_dir / "subtitle-overrides")
 
 
 @app.post("/api/playback/{library}")

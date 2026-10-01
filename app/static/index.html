@@ -15,7 +15,7 @@
     })();
   </script>
   <link rel="stylesheet" href="/static/styles.css">
-  <link rel="stylesheet" href="/static/catalog.css?v=12">
+  <link rel="stylesheet" href="/static/catalog.css?v=13">
 </head>
 <body>
   <aside>
@@ -55,6 +55,7 @@
           <input id="admin-file-input" type="file" multiple hidden>
           <button id="admin-refresh" class="secondary" type="button">Refresh indexes</button>
         </div>
+        <button id="download" class="secondary" type="button" disabled>Download</button>
         <button id="view-toggle" class="secondary" aria-label="Switch to catalog view" title="Switch to catalog view">List</button>
         <button id="refresh" class="secondary">Refresh</button>
       </div>
@@ -88,6 +89,6 @@
   <dialog id="admin-dialog"><form id="admin-form"><h2 id="admin-dialog-title">Manage media</h2><p id="admin-item-path" class="dialog-path"></p><fieldset><legend>File</legend><label>Name<input id="admin-name" required maxlength="255"></label><label>Move to folder<input id="admin-destination" readonly></label><div class="inline-actions"><button id="admin-rename-action" type="button" class="secondary">Rename</button><button id="admin-choose-folder" type="button" class="secondary">Choose folder</button><button id="admin-move-action" type="button" class="secondary">Move here</button></div><div id="admin-folder-picker" class="hidden"><div id="admin-folder-crumbs" class="breadcrumbs"></div><div id="admin-folder-list" class="folder-picker-list"></div><button id="admin-use-folder" type="button">Use this folder</button></div></fieldset><fieldset id="metadata-fields"><legend>Catalog information</legend><div class="form-grid"><label>Title<input id="metadata-title" maxlength="500"></label><label>Year<input id="metadata-year" type="number" min="1800" max="2200"></label><label>IMDb ID<input id="metadata-imdb" placeholder="tt1234567"></label><label>IMDb rating<input id="metadata-rating" type="number" min="0" max="10" step="0.1"></label></div><label>Genres<input id="metadata-genres"></label><label>Actors<textarea id="metadata-actors" rows="2"></textarea></label><label>Synopsis<textarea id="metadata-synopsis" rows="7"></textarea></label><button id="metadata-save" type="button">Save catalog information</button></fieldset><p id="admin-dialog-status" class="dialog-status"></p><div><button id="admin-delete-action" type="button" class="danger">Delete…</button><span class="dialog-spacer"></span><button id="admin-close-action" type="button" class="secondary">Close</button></div></form></dialog>
   <div id="admin-transfer" class="admin-transfer hidden"><strong>Upload</strong><span></span><progress max="100" value="0"></progress></div>
   <script src="/static/hls.min.js?v=1.6.16"></script>
-  <script src="/static/app.js?v=25"></script>
+  <script src="/static/app.js?v=26"></script>
 </body>
 </html>

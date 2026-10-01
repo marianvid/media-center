@@ -6,11 +6,13 @@ import shutil
 import subprocess
 import tempfile
 import threading
+import zipfile
 from pathlib import Path
 
 from fastapi import HTTPException, Request
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from PIL import Image, ImageOps
+from starlette.background import BackgroundTask
 from charset_normalizer import from_bytes
 
 from .media_types import content_type, media_type
@@ -82,6 +84,50 @@ def ranged_file(path: Path, request: Request):
     return StreamingResponse(segment(), status_code=206, media_type=content_type(path), headers=headers)
 
 
+def _directory_archive(source: Path, destination: Path) -> None:
+    with zipfile.ZipFile(destination, "w", compression=zipfile.ZIP_DEFLATED, allowZip64=True) as archive:
+        archive.writestr(f"{source.name}/", b"")
+        for item in sorted(source.rglob("*")):
+            # Archive only real content from the selected tree. Following links
+            # could expose files outside the configured media library.
+            if item.is_symlink():
+                continue
+            relative = Path(source.name) / item.relative_to(source)
+            if item.is_dir():
+                archive.writestr(f"{relative.as_posix()}/", b"")
+            elif item.is_file():
+                archive.write(item, relative.as_posix())
+
+
+def downloadable(path: Path, temp_dir: Path) -> FileResponse:
+    if path.is_file():
+        return FileResponse(
+            path,
+            filename=path.name,
+            media_type="application/octet-stream",
+            content_disposition_type="attachment",
+        )
+    if not path.is_dir():
+        raise HTTPException(400, "Not a file or directory")
+
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    handle = tempfile.NamedTemporaryFile(prefix="download-", suffix=".zip", dir=temp_dir, delete=False)
+    archive_path = Path(handle.name)
+    handle.close()
+    try:
+        _directory_archive(path, archive_path)
+    except Exception:
+        archive_path.unlink(missing_ok=True)
+        raise
+    return FileResponse(
+        archive_path,
+        filename=f"{path.name}.zip",
+        media_type="application/zip",
+        content_disposition_type="attachment",
+        background=BackgroundTask(archive_path.unlink, missing_ok=True),
+    )
+
+
 def thumbnail(path: Path, cache_dir: Path, size: int = 480) -> Response:
     key = hashlib.sha256(f"{path}:{path.stat().st_mtime_ns}:{size}".encode()).hexdigest()
     target = cache_dir / "thumbs" / f"{key}.jpg"
@@ -112,7 +158,17 @@ def thumbnail(path: Path, cache_dir: Path, size: int = 480) -> Response:
     return Response(target.read_bytes(), media_type="image/jpeg", headers={"Cache-Control": "public, max-age=86400"})
 
 
-def subtitle_vtt(path: Path, cache_dir: Path) -> FileResponse:
+def subtitle_override_path(path: Path, overrides_dir: Path) -> Path:
+    """Return the persistent override path for this exact media revision."""
+    key = hashlib.sha256(f"subtitle-override-v1:{path}:{path.stat().st_mtime_ns}".encode()).hexdigest()
+    return overrides_dir / f"{key}.vtt"
+
+
+def subtitle_vtt(path: Path, cache_dir: Path, overrides_dir: Path | None = None) -> FileResponse:
+    if overrides_dir is not None:
+        override = subtitle_override_path(path, overrides_dir)
+        if override.is_file():
+            return FileResponse(override, media_type="text/vtt", headers={"Cache-Control": "no-cache"})
     key = hashlib.sha256(f"subtitle-v2:{path}:{path.stat().st_mtime_ns}".encode()).hexdigest()
     target = cache_dir / "subtitles" / f"{key}.vtt"
     target.parent.mkdir(parents=True, exist_ok=True)

@@ -41,6 +41,10 @@ def normalized(value: str) -> str:
     return NORMALIZE.sub("", value.casefold())
 
 
+def is_manual_override(status: str) -> bool:
+    return status.startswith("manual") and status != "manual_episode"
+
+
 def episode_numbers(path: str) -> tuple[int, int, str] | None:
     name = path.rsplit("/", 1)[-1]
     explicit = SEASON_EPISODE.search(name) or X_PATTERN.search(name)
@@ -191,6 +195,15 @@ class EpisodeEnricher:
         ]
         return contained[0] if len(contained) == 1 else None
 
+    @classmethod
+    def _match_episode(
+        cls, item: dict, parent: dict, episodes: list[dict], numbered: dict | None
+    ) -> dict | None:
+        # Episode providers disagree on whether a double-length pilot occupies
+        # one or two episode numbers. Prefer a unique title embedded in the
+        # filename so that later files do not inherit that numbering offset.
+        return cls._title_match(item, parent, episodes) or numbered
+
     def _imdb_plots(self, imdb_ids: list[str]) -> dict[str, str]:
         plots: dict[str, str] = {}
         total = len(imdb_ids)
@@ -290,7 +303,7 @@ class EpisodeEnricher:
         local: list[dict] = []
         parent_ids: set[str] = set()
         for item in files:
-            if item["imdb_match_status"].startswith("manual"):
+            if is_manual_override(item["imdb_match_status"]):
                 continue
             parent = self._parent_for(item["rel_path"], folders)
             if not parent:
@@ -340,7 +353,12 @@ class EpisodeEnricher:
             imdb_id = None
             if item["season"] is not None and item["episode"] is not None:
                 imdb_id = by_key.get((item["parent_imdb"], item["season"], item["episode"]))
-            detail = details.get(imdb_id) if imdb_id else self._title_match(item, item["parent"], episodes_by_parent[item["parent_imdb"]])
+            detail = self._match_episode(
+                item,
+                item["parent"],
+                episodes_by_parent[item["parent_imdb"]],
+                details.get(imdb_id) if imdb_id else None,
+            )
             if detail:
                 matches[item["id"]] = detail
                 item["imdb_id"] = detail["imdb_id"]

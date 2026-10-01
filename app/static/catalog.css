@@ -107,6 +107,17 @@ body {
   position: relative;
 }
 
+.item.selected {
+  background: var(--panel2);
+  border-color: var(--cyan);
+  box-shadow: inset 3px 0 var(--cyan);
+}
+
+.item:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
 .icon {
   border: 1px solid color-mix(in srgb, currentColor 28%, transparent);
   border-radius: 12px;
