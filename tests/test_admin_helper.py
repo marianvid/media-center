@@ -70,3 +70,30 @@ def test_library_roots_are_protected(tmp_path, monkeypatch):
         except ValueError:
             pass
     assert (tmp_path / "video").is_dir()
+
+
+def test_socket_is_limited_to_the_configured_group(tmp_path):
+    import os
+    import stat
+
+    helper = load_helper()
+    socket_file = tmp_path / "admin.sock"
+    socket_file.touch()
+
+    helper.secure_socket(socket_file, str(os.getgid()))
+
+    info = socket_file.stat()
+    assert stat.S_IMODE(info.st_mode) == 0o660
+    assert info.st_gid == os.getgid()
+
+
+def test_socket_without_group_stays_open(tmp_path):
+    import stat
+
+    helper = load_helper()
+    socket_file = tmp_path / "admin.sock"
+    socket_file.touch()
+
+    helper.secure_socket(socket_file, "")
+
+    assert stat.S_IMODE(socket_file.stat().st_mode) == 0o666

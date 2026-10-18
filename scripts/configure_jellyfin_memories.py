@@ -4,7 +4,7 @@
 Jellyfin only provides playback for this library (see
 docs/decisions/0001-memories-video-playback.md): the options are copied from
 the existing video library, then photos, trickplay, chapter images, internet
-metadata and real-time monitoring are turned off. Safe to run again.
+metadata, metadata/image fetchers and real-time monitoring are turned off. Safe to run again.
 """
 from __future__ import annotations
 
@@ -24,6 +24,12 @@ QUIET_OPTIONS = {
     "EnableInternetProviders": False,
     "SaveLocalMetadata": False,
     "AutomaticRefreshIntervalDays": 0,
+    # No metadata or image fetchers: an empty TypeOptions list means "defaults",
+    # which extract a cover frame from every video and keep the HDD busy.
+    "TypeOptions": [
+        {"Type": "Video", "MetadataFetchers": [], "MetadataFetcherOrder": [],
+         "ImageFetchers": [], "ImageFetcherOrder": [], "ImageOptions": []}
+    ],
 }
 
 

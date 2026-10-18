@@ -12,6 +12,9 @@ from pathlib import Path
 ROOT = Path("/mnt/media").resolve()
 SOCKET = Path("/var/lib/media-center-bridge/admin/admin.sock")
 PROTECTED_ROOTS = {"amintiri", "audio", "video"}
+# Numeric group allowed to use the socket: the host gid of the Media Center
+# service user. Unset keeps the historic behaviour (every local user).
+SOCKET_GID = os.environ.get("MEDIA_ADMIN_SOCKET_GID", "")
 
 
 def resolve_relative(value: str) -> Path:
@@ -116,11 +119,20 @@ class Server(socketserver.ThreadingUnixStreamServer):
     daemon_threads = True
 
 
+def secure_socket(path: Path, gid: str) -> None:
+    """Restrict the socket to one group when a gid is configured."""
+    if gid:
+        os.chown(path, -1, int(gid))
+        os.chmod(path, 0o660)
+    else:
+        os.chmod(path, 0o666)
+
+
 def main():
     SOCKET.parent.mkdir(parents=True, exist_ok=True)
     SOCKET.unlink(missing_ok=True)
     with Server(str(SOCKET), Handler) as server:
-        os.chmod(SOCKET, 0o666)
+        secure_socket(SOCKET, SOCKET_GID)
         server.serve_forever()
 
 

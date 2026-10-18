@@ -37,3 +37,9 @@ browser ──POST /api/playback/{library}──▶ PlaybackPlanner
 Jellyfin item ids are copied into the catalog by `JellyfinClient.sync_catalog`
 for every library in `playback.JELLYFIN_LIBRARIES`, joined on the full physical
 path. Decision record: `decisions/0001-memories-video-playback.md`.
+
+## Runtime identity
+
+The web application runs as the unprivileged system user `media-center`; the
+host helper alone writes the media disk, through a socket limited to that
+user's group. Decision record: `decisions/0002-unprivileged-service-user.md`.
