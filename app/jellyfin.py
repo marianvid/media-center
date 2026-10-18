@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 import sqlite3
 from datetime import datetime, timezone
+from collections.abc import Mapping
 from pathlib import Path
 from urllib.parse import urlencode
 
@@ -56,9 +57,15 @@ class JellyfinClient:
             raise JellyfinError(f"Jellyfin is unavailable: {exc}") from exc
         return response.json()
 
-    def sync_catalog(self, database, video_root: Path, jellyfin_database: Path) -> dict:
-        root = video_root.resolve()
-        mappings: dict[str, tuple[str, str]] = {}
+    def sync_catalog(self, database, library_roots: Mapping[str, Path], jellyfin_database: Path) -> dict:
+        """Copy Jellyfin item ids into the catalog for every library in ``library_roots``.
+
+        Items are joined on the complete physical path, so duplicate file names in
+        different folders never collide. ``library_roots`` maps a catalog library
+        name (``video``, ``amintiri``) to the folder Jellyfin indexes for it.
+        """
+        roots = {library: root.resolve() for library, root in library_roots.items()}
+        mappings: dict[str, dict[str, str]] = {library: {} for library in roots}
         try:
             source_db = sqlite3.connect(f"file:{jellyfin_database}?mode=ro", uri=True, timeout=30)
             rows = source_db.execute(
@@ -66,38 +73,51 @@ class JellyfinClient:
                 "WHERE MediaType='Video' AND IsFolder=0 AND Path IS NOT NULL"
             )
             for item_id, source_path in rows:
-                try:
-                    relative = Path(source_path).relative_to(root).as_posix()
-                except ValueError:
-                    continue
-                physical_id = str(item_id).replace("-", "").lower()
-                mappings[relative] = (physical_id, physical_id)
+                for library, root in roots.items():
+                    try:
+                        relative = Path(source_path).relative_to(root).as_posix()
+                    except ValueError:
+                        continue
+                    mappings[library][relative] = str(item_id).replace("-", "").lower()
+                    break
             source_db.close()
         except (OSError, sqlite3.Error) as exc:
             raise JellyfinError(f"Jellyfin catalog cannot be read: {exc}") from exc
 
         synced_at = datetime.now(timezone.utc).isoformat()
+        libraries: dict[str, dict[str, int]] = {}
         with database.connect() as db:
-            db.execute(
-                "UPDATE items SET jellyfin_item_id='',jellyfin_media_source_id='',jellyfin_synced_at='' "
-                "WHERE library='video' AND media_type='video'"
-            )
-            db.executemany(
-                "UPDATE items SET jellyfin_item_id=?,jellyfin_media_source_id=?,jellyfin_synced_at=? "
-                "WHERE library='video' AND media_type='video' AND rel_path=?",
-                [(item_id, source_id, synced_at, relative) for relative, (item_id, source_id) in mappings.items()],
-            )
-            matched = db.execute(
-                "SELECT count(*) FROM items WHERE library='video' AND media_type='video' AND jellyfin_item_id<>''"
-            ).fetchone()[0]
-            local_total = db.execute(
-                "SELECT count(*) FROM items WHERE library='video' AND media_type='video'"
-            ).fetchone()[0]
-        return {
-            "jellyfin_items": len(mappings),
-            "matched": matched,
-            "unmatched": local_total - matched,
+            for library, library_mappings in mappings.items():
+                db.execute(
+                    "UPDATE items SET jellyfin_item_id='',jellyfin_media_source_id='',jellyfin_synced_at='' "
+                    "WHERE library=? AND media_type='video'",
+                    (library,),
+                )
+                db.executemany(
+                    "UPDATE items SET jellyfin_item_id=?,jellyfin_media_source_id=?,jellyfin_synced_at=? "
+                    "WHERE library=? AND media_type='video' AND rel_path=?",
+                    [
+                        (item_id, item_id, synced_at, library, relative)
+                        for relative, item_id in library_mappings.items()
+                    ],
+                )
+                matched = db.execute(
+                    "SELECT count(*) FROM items WHERE library=? AND media_type='video' AND jellyfin_item_id<>''",
+                    (library,),
+                ).fetchone()[0]
+                local_total = db.execute(
+                    "SELECT count(*) FROM items WHERE library=? AND media_type='video'", (library,)
+                ).fetchone()[0]
+                libraries[library] = {
+                    "jellyfin_items": len(library_mappings),
+                    "matched": matched,
+                    "unmatched": local_total - matched,
+                }
+        totals = {
+            key: sum(counts[key] for counts in libraries.values())
+            for key in ("jellyfin_items", "matched", "unmatched")
         }
+        return {**totals, "libraries": libraries}
 
     def _admin_post(self, path: str, *, params: dict | None = None) -> None:
         if not self.base_url or not self.admin_token:
@@ -111,8 +131,8 @@ class JellyfinClient:
     def refresh_library(self) -> None:
         self._admin_post("/Library/Refresh")
 
-    def refresh_paths(self, paths: list[str], video_root: Path, jellyfin_database: Path) -> int:
-        root = video_root.resolve()
+    def refresh_paths(self, paths: list[str], library_root: Path, jellyfin_database: Path) -> int:
+        root = library_root.resolve()
         item_ids: set[str] = set()
         try:
             source_db = sqlite3.connect(f"file:{jellyfin_database}?mode=ro", uri=True, timeout=30)

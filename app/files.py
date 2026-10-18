@@ -128,6 +128,25 @@ def downloadable(path: Path, temp_dir: Path) -> FileResponse:
     )
 
 
+# Seek offsets tried in order: 15 s skips black lead-ins in films; phone clips
+# are often shorter than that, so fall back to 1 s and then the first frame.
+FRAME_OFFSETS = ("15", "1", "0")
+
+
+def video_frame(path: Path, target: Path, size: int) -> None:
+    """Write one scaled frame of ``path`` to ``target``; OSError when none can be read."""
+    for offset in FRAME_OFFSETS:
+        target.unlink(missing_ok=True)
+        subprocess.run(
+            ["ffmpeg", "-v", "error", "-ss", offset, "-i", str(path), "-frames:v", "1",
+             "-vf", f"scale='min({size},iw)':-2", "-y", str(target)],
+            check=False, timeout=90,
+        )
+        if target.exists() and target.stat().st_size > 0:
+            return
+    raise FileNotFoundError(f"No video frame in {path.name}")
+
+
 def thumbnail(path: Path, cache_dir: Path, size: int = 480) -> Response:
     key = hashlib.sha256(f"{path}:{path.stat().st_mtime_ns}:{size}".encode()).hexdigest()
     target = cache_dir / "thumbs" / f"{key}.jpg"
@@ -145,10 +164,7 @@ def thumbnail(path: Path, cache_dir: Path, size: int = 480) -> Response:
                             image.thumbnail((size, size))
                             image.save(temp, "JPEG", quality=82, optimize=True)
                     elif media_type(path) == "video":
-                        subprocess.run(
-                            ["ffmpeg", "-v", "error", "-ss", "00:00:15", "-i", str(path), "-frames:v", "1", "-vf", f"scale='min({size},iw)':-2", "-y", str(temp)],
-                            check=True, timeout=90,
-                        )
+                        video_frame(path, temp, size)
                     else:
                         raise HTTPException(404, "No preview")
                     os.replace(temp, target)

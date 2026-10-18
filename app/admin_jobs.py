@@ -6,6 +6,7 @@ from pathlib import Path
 
 from .db import Database
 from .jellyfin import JellyfinClient
+from .playback import JELLYFIN_LIBRARIES
 from .scanner import CatalogScanner
 
 
@@ -31,6 +32,17 @@ class AdminIndexer:
         threading.Thread(target=self._run, daemon=True, name="admin-index-refresh").start()
         return True
 
+    @staticmethod
+    def _jellyfin_paths(admin_paths: list[str]) -> dict[str, list[str]]:
+        """Group changed admin paths by Jellyfin library, relative to that library."""
+        grouped: dict[str, list[str]] = {}
+        for library in JELLYFIN_LIBRARIES:
+            prefix = f"{library}/"
+            selected = [path.removeprefix(prefix) for path in admin_paths if path == library or path.startswith(prefix)]
+            if selected:
+                grouped[library] = selected
+        return grouped
+
     def _job(self, state: str, message: str) -> None:
         with self.db.connect() as db:
             db.execute(
@@ -47,18 +59,23 @@ class AdminIndexer:
                     self._paths.clear()
                     self._full = False
                 self._job("running", "Updating Media Center and Jellyfin indexes")
-                video_paths = [path.removeprefix("video/") for path in paths if path == "video" or path.startswith("video/")]
+                jellyfin_paths = self._jellyfin_paths(paths)
                 if full:
                     self.jellyfin.refresh_library()
-                elif video_paths:
-                    self.jellyfin.refresh_paths(video_paths, self.readonly_root / "video", self.jellyfin_database)
+                else:
+                    for library, library_paths in jellyfin_paths.items():
+                        self.jellyfin.refresh_paths(library_paths, self.readonly_root / library, self.jellyfin_database)
                 self.scanner.run_blocking()
-                if full or video_paths:
+                if full or jellyfin_paths:
                     # Jellyfin refreshes asynchronously. Reconcile IDs more than once so
                     # additions and larger folders become playable without manual work.
                     for delay in (3, 12, 30):
                         time.sleep(delay)
-                        self.jellyfin.sync_catalog(self.db, self.readonly_root / "video", self.jellyfin_database)
+                        self.jellyfin.sync_catalog(
+                            self.db,
+                            {library: self.readonly_root / library for library in JELLYFIN_LIBRARIES},
+                            self.jellyfin_database,
+                        )
                         with self._guard:
                             if self._paths or self._full:
                                 break

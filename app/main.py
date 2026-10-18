@@ -18,6 +18,7 @@ from .files import downloadable, list_directory, ranged_file, subtitle_vtt, thum
 from .episode_sync import episode_label
 from .imdb_sync import ImdbSync
 from .jellyfin import JellyfinClient, JellyfinError
+from .playback import JELLYFIN_LIBRARIES, PlaybackPlanner, PlaybackUnavailable
 from .scanner import CatalogScanner
 from .security import UnsafePath, resolve_admin, resolve_library
 
@@ -34,6 +35,20 @@ jellyfin = JellyfinClient(
     settings.jellyfin_admin_token,
 )
 admin_indexer = AdminIndexer(db, scanner, jellyfin, settings.readonly_root, settings.jellyfin_database)
+
+
+def jellyfin_mapping(library: str, rel_path: str) -> tuple[str, str] | None:
+    """Catalog adapter for the playback planner: the stored Jellyfin ids of one video."""
+    with db.connect() as conn:
+        row = conn.execute(
+            "SELECT jellyfin_item_id,jellyfin_media_source_id FROM items "
+            "WHERE library=? AND media_type='video' AND rel_path=?",
+            (library, rel_path),
+        ).fetchone()
+    return None if row is None else (row["jellyfin_item_id"], row["jellyfin_media_source_id"])
+
+
+playback_planner = PlaybackPlanner(jellyfin_mapping, jellyfin)
 
 
 @asynccontextmanager
@@ -128,23 +143,15 @@ def media_subtitle(library: str, path: str = Query(...)):
 
 @app.post("/api/playback/{library}")
 def start_playback(library: str, path: str = Query(...)):
-    if library != "video":
-        raise HTTPException(400, "Jellyfin playback is only available for the video library")
+    if library not in JELLYFIN_LIBRARIES:
+        raise HTTPException(400, "Playback is only available for the video and amintiri libraries")
     target = resolve_library(settings.readonly_root, library, path)
     if not target.is_file():
         raise HTTPException(400, "Not a file")
-    with db.connect() as conn:
-        mapping = conn.execute(
-            "SELECT jellyfin_item_id,jellyfin_media_source_id FROM items "
-            "WHERE library='video' AND media_type='video' AND rel_path=?",
-            (path,),
-        ).fetchone()
-    if mapping is None or not mapping["jellyfin_item_id"] or not mapping["jellyfin_media_source_id"]:
-        raise HTTPException(503, "Video is not mapped to Jellyfin yet")
     try:
-        return jellyfin.playback(mapping["jellyfin_item_id"], mapping["jellyfin_media_source_id"])
-    except JellyfinError as exc:
-        raise HTTPException(503, str(exc))
+        return playback_planner.plan(library, path, target)
+    except PlaybackUnavailable as exc:
+        raise HTTPException(exc.status, str(exc))
 
 
 @app.post("/api/jobs/jellyfin-sync")
@@ -152,7 +159,7 @@ def sync_jellyfin_catalog():
     try:
         return jellyfin.sync_catalog(
             db,
-            settings.readonly_root / "video",
+            {library: settings.readonly_root / library for library in JELLYFIN_LIBRARIES},
             settings.jellyfin_database,
         )
     except JellyfinError as exc:

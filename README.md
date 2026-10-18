@@ -48,6 +48,8 @@ Movie and episode matching, ratings, genres and cast use IMDb identifiers and co
 - a resizable, persistent navigation sidebar with media-specific filters;
 - direct HTML5 playback for audio and mixed photo/video collections with byte-range support;
 - Jellyfin HLS playback for the video library, with H.264/AAC stream copy when possible;
+- memories in formats a browser cannot open (phone `.3gp`, camcorder `.mts`, DVD `.vob`) play through a
+  separate Jellyfin home-videos library; common formats (`.mp4`, `.mov`, `.webm`) still play directly;
 - optional AMD hardware transcoding through VA-API for incompatible video codecs;
 - independent playback sessions for multiple simultaneous home users;
 - photo previews plus previous/next navigation;

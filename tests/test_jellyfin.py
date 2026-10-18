@@ -110,9 +110,14 @@ def test_sync_catalog_maps_duplicate_names_by_full_path(tmp_path):
         "playback-token",
         "user-id",
     )
-    result = client.sync_catalog(database, video_root, jellyfin_database)
+    result = client.sync_catalog(database, {"video": video_root}, jellyfin_database)
 
-    assert result == {"jellyfin_items": 2, "matched": 2, "unmatched": 0}
+    assert result == {
+        "jellyfin_items": 2,
+        "matched": 2,
+        "unmatched": 0,
+        "libraries": {"video": {"jellyfin_items": 2, "matched": 2, "unmatched": 0}},
+    }
     with database.connect() as db:
         rows = db.execute(
             "SELECT rel_path,jellyfin_item_id,jellyfin_media_source_id FROM items ORDER BY rel_path"
@@ -121,3 +126,58 @@ def test_sync_catalog_maps_duplicate_names_by_full_path(tmp_path):
         (paths[0], "itema", "itema"),
         (paths[1], "itemb", "itemb"),
     ]
+
+
+def test_sync_catalog_maps_each_library_by_its_own_root(tmp_path):
+    readonly = Path("/srv/media/readonly")
+    jellyfin_database = tmp_path / "jellyfin.db"
+    with sqlite3.connect(jellyfin_database) as source:
+        source.execute("CREATE TABLE BaseItems(Id TEXT,Path TEXT,MediaType TEXT,IsFolder INTEGER)")
+        source.executemany(
+            "INSERT INTO BaseItems VALUES(?,?, 'Video',0)",
+            [
+                ("FILM", str(readonly / "video/Film/film.mkv")),
+                ("CLIP", str(readonly / "amintiri/Telefon/Video0002.3gp")),
+                ("ELSEWHERE", "/other/place/clip.mp4"),
+            ],
+        )
+    database = Database(tmp_path / "catalog.db")
+    database.initialize()
+    with database.connect() as db:
+        db.executemany(
+            "INSERT INTO items(library,rel_path,parent_path,name,kind,media_type) VALUES(?,?,?,?,'file','video')",
+            [
+                ("video", "Film/film.mkv", "Film", "film.mkv"),
+                ("amintiri", "Telefon/Video0002.3gp", "Telefon", "Video0002.3gp"),
+                ("amintiri", "Telefon/Video0003.3gp", "Telefon", "Video0003.3gp"),
+            ],
+        )
+
+    client = JellyfinClient("http://jellyfin:8096", "http://media:8096", "token", "user")
+    result = client.sync_catalog(
+        database,
+        {"video": readonly / "video", "amintiri": readonly / "amintiri"},
+        jellyfin_database,
+    )
+
+    assert result["libraries"] == {
+        "video": {"jellyfin_items": 1, "matched": 1, "unmatched": 0},
+        "amintiri": {"jellyfin_items": 1, "matched": 1, "unmatched": 1},
+    }
+    assert result["matched"] == 2 and result["unmatched"] == 1
+    with database.connect() as db:
+        rows = db.execute("SELECT library,rel_path,jellyfin_item_id FROM items ORDER BY library,rel_path").fetchall()
+    assert [tuple(row) for row in rows] == [
+        ("amintiri", "Telefon/Video0002.3gp", "clip"),
+        ("amintiri", "Telefon/Video0003.3gp", ""),
+        ("video", "Film/film.mkv", "film"),
+    ]
+
+
+def test_sync_catalog_reports_unreadable_jellyfin_database(tmp_path):
+    database = Database(tmp_path / "catalog.db")
+    database.initialize()
+    client = JellyfinClient("http://jellyfin:8096", "http://media:8096", "token", "user")
+
+    with pytest.raises(JellyfinError, match="cannot be read"):
+        client.sync_catalog(database, {"video": tmp_path}, tmp_path / "missing" / "jellyfin.db")
