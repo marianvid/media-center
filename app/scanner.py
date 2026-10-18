@@ -10,6 +10,9 @@ from .media_metadata import image_year, read_audio_metadata
 from .media_types import media_type
 
 
+LIBRARIES = ("amintiri", "audio", "video")
+
+
 TITLE_YEAR = re.compile(r"^(?P<title>.*?)[ ._-]*[\(\[](?P<year>19\d{2}|20\d{2})(?:[^\)\]]*)[\)\]]")
 NOISE = re.compile(r"[ ._-](?:2160p|1080p|720p|576p|480p|BluRay|WEB[- .]?DL|HEVC|x26[45]|AAC|DD|DTS).*$", re.I)
 
@@ -53,55 +56,80 @@ class CatalogScanner:
             )
 
     def scan(self) -> None:
+        """Index every library (Admin's full refresh)."""
+        self._scan([(library, "") for library in LIBRARIES])
+
+    def scan_scope(self, library: str, subpath: str = "") -> int:
+        """Index one folder and everything below it; return the number of entries seen."""
+        if library not in LIBRARIES:
+            raise ValueError(f"Unknown library {library!r}")
+        with self._lock:
+            return self._scan([(library, subpath)])
+
+    def _scan(self, scopes: list[tuple[str, str]]) -> int:
         self._job("running", "Scanning media libraries")
         seen: set[tuple[str, str]] = set()
         count = 0
         with self.db.connect() as db:
-            for library in ("amintiri", "audio", "video"):
+            for library, subpath in scopes:
                 base = self.root / library
-                if not base.exists():
+                start = base / subpath if subpath else base
+                if not start.is_dir():
                     continue
-                for current, directories, files in os.walk(base):
+                if subpath:
+                    self._index(db, library, base, start, seen)
+                for current, directories, files in os.walk(start):
                     directories[:] = [d for d in directories if not d.startswith(".")]
-                    parent = Path(current)
                     for name in [*directories, *files]:
                         if name.startswith("._") or name in {".DS_Store", "Thumbs.db"}:
                             continue
-                        path = parent / name
-                        rel = path.relative_to(base).as_posix()
-                        parent_rel = path.parent.relative_to(base).as_posix()
-                        if parent_rel == ".":
-                            parent_rel = ""
-                        try:
-                            stat = path.stat()
-                        except (FileNotFoundError, PermissionError):
-                            continue
-                        kind = "directory" if path.is_dir() else "file"
-                        mtype = media_type(path)
-                        title, year = title_from_name(name)
-                        if library == "amintiri" and kind == "file" and mtype == "image":
-                            year = image_year(rel, stat.st_mtime, year)
-                        db.execute(
-                            "INSERT INTO items(library,rel_path,parent_path,name,kind,media_type,size,mtime,title,year) "
-                            "VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(library,rel_path) DO UPDATE SET "
-                            "parent_path=excluded.parent_path,name=excluded.name,kind=excluded.kind,media_type=excluded.media_type,"
-                            "size=excluded.size,mtime=excluded.mtime,"
-                            "title=CASE WHEN items.imdb_match_status LIKE 'manual%' THEN items.title ELSE excluded.title END,"
-                            "year=CASE WHEN items.imdb_match_status LIKE 'manual%' THEN items.year "
-                            "WHEN items.title=excluded.title THEN coalesce(excluded.year,items.year) ELSE excluded.year END,"
-                            "updated_at=CURRENT_TIMESTAMP",
-                            (library, rel, parent_rel, name, kind, mtype, stat.st_size if kind == "file" else 0, stat.st_mtime, title, year),
-                        )
-                        seen.add((library, rel))
-                        count += 1
-                        if count % 1000 == 0:
-                            db.commit()
-                            self._job("running", f"Indexed {count:,} items", count)
-            rows = db.execute("SELECT library,rel_path FROM items").fetchall()
-            stale = [(r["library"], r["rel_path"]) for r in rows if (r["library"], r["rel_path"]) not in seen]
-            db.executemany("DELETE FROM items WHERE library=? AND rel_path=?", stale)
-        self.enrich_audio_metadata()
+                        if self._index(db, library, base, Path(current) / name, seen):
+                            count += 1
+                            if count % 1000 == 0:
+                                db.commit()
+                                self._job("running", f"Indexed {count:,} items", count)
+                stale = [
+                    rel for (rel,) in db.execute(
+                        "SELECT rel_path FROM items WHERE library=? AND (?='' OR rel_path=? OR substr(rel_path,1,?)=?)",
+                        (library, subpath, subpath, len(subpath) + 1, f"{subpath}/"),
+                    )
+                    if (library, rel) not in seen
+                ]
+                db.executemany("DELETE FROM items WHERE library=? AND rel_path=?", [(library, rel) for rel in stale])
+        if any(library == "audio" for library, _ in scopes):
+            self.enrich_audio_metadata()
         self._job("complete", f"Indexed {count:,} items", count)
+        return count
+
+    def _index(self, db, library: str, base: Path, path: Path, seen: set[tuple[str, str]]) -> bool:
+        """Insert or update one catalog row; False when the entry vanished or is unreadable."""
+        rel = path.relative_to(base).as_posix()
+        parent_rel = path.parent.relative_to(base).as_posix()
+        if parent_rel == ".":
+            parent_rel = ""
+        try:
+            stat = path.stat()
+        except (FileNotFoundError, PermissionError):
+            return False
+        name = path.name
+        kind = "directory" if path.is_dir() else "file"
+        mtype = media_type(path)
+        title, year = title_from_name(name)
+        if library == "amintiri" and kind == "file" and mtype == "image":
+            year = image_year(rel, stat.st_mtime, year)
+        db.execute(
+            "INSERT INTO items(library,rel_path,parent_path,name,kind,media_type,size,mtime,title,year) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(library,rel_path) DO UPDATE SET "
+            "parent_path=excluded.parent_path,name=excluded.name,kind=excluded.kind,media_type=excluded.media_type,"
+            "size=excluded.size,mtime=excluded.mtime,"
+            "title=CASE WHEN items.imdb_match_status LIKE 'manual%' THEN items.title ELSE excluded.title END,"
+            "year=CASE WHEN items.imdb_match_status LIKE 'manual%' THEN items.year "
+            "WHEN items.title=excluded.title THEN coalesce(excluded.year,items.year) ELSE excluded.year END,"
+            "updated_at=CURRENT_TIMESTAMP",
+            (library, rel, parent_rel, name, kind, mtype, stat.st_size if kind == "file" else 0, stat.st_mtime, title, year),
+        )
+        seen.add((library, rel))
+        return True
 
     def enrich_audio_metadata(self) -> int:
         with self.db.connect() as db:

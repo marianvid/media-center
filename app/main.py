@@ -14,11 +14,12 @@ from .admin_client import AdminClient, AdminError
 from .admin_jobs import AdminIndexer
 from .config import settings
 from .db import Database
-from .files import downloadable, list_directory, ranged_file, subtitle_vtt, thumbnail
+from .files import downloadable, ensure_thumbnail, list_directory, ranged_file, subtitle_vtt, thumbnail
 from .episode_sync import episode_label
 from .imdb_sync import ImdbSync
 from .jellyfin import JellyfinClient, JellyfinError
 from .playback import JELLYFIN_LIBRARIES, PlaybackPlanner, PlaybackUnavailable
+from .refresh import LIBRARIES, FolderRefresher
 from .scanner import CatalogScanner
 from .security import UnsafePath, resolve_admin, resolve_library
 
@@ -49,6 +50,10 @@ def jellyfin_mapping(library: str, rel_path: str) -> tuple[str, str] | None:
 
 
 playback_planner = PlaybackPlanner(jellyfin_mapping, jellyfin)
+folder_refresher = FolderRefresher(
+    db, scanner, jellyfin, settings.readonly_root, settings.jellyfin_database,
+    lambda path: ensure_thumbnail(path, settings.cache_dir, 480),
+)
 
 
 @asynccontextmanager
@@ -56,7 +61,8 @@ async def lifespan(app: FastAPI):
     settings.state_dir.mkdir(parents=True, exist_ok=True)
     settings.cache_dir.mkdir(parents=True, exist_ok=True)
     db.initialize()
-    scanner.start()
+    if settings.scan_on_start:
+        scanner.start()
     yield
 
 
@@ -478,6 +484,19 @@ def admin_update_metadata(payload: MetadataRequest):
             ),
         )
     return {"ok": True}
+
+
+@app.post("/api/refresh/{library}")
+def refresh_folder(library: str, path: str = ""):
+    """Catalog, Jellyfin and previews for the folder on screen and below it."""
+    if library not in LIBRARIES:
+        raise HTTPException(400, "Unknown library")
+    target = resolve_library(settings.readonly_root, library, path)
+    if not target.is_dir():
+        raise HTTPException(400, "Not a directory")
+    if not folder_refresher.start(library, path):
+        raise HTTPException(409, "A refresh is already running")
+    return {"started": True}
 
 
 @app.post("/api/jobs/scan")

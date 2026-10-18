@@ -62,6 +62,8 @@ Movie and episode matching, ratings, genres and cast use IMDb identifiers and co
 - complete Admin file management: create folders, direct-to-storage uploads, rename, move and confirmed delete;
 - local catalog editing for title, year, IMDb ID/rating, genres, cast and synopsis;
 - automatic targeted Media Center/Jellyfin refreshes after file changes, plus a manual full refresh;
+- no background indexing, so the media disk can sleep: each section's **Refresh** updates the folder on
+  screen and everything below it (catalog, Jellyfin, previews);
 - background rescans and IMDb metadata refreshes.
 
 ## Playback pipeline

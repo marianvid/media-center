@@ -14,6 +14,8 @@ class Settings:
     health_file: Path = Path(os.getenv("MEDIA_HEALTH_FILE", "/srv/bridge/health/health.json"))
     admin_socket: Path = Path(os.getenv("MEDIA_ADMIN_SOCKET", "/srv/bridge/admin/admin.sock"))
     imdb_cache_dir: Path = Path(os.getenv("IMDB_CACHE_DIR", "/var/cache/media-center/imdb"))
+    # Off by default: the media HDD sleeps until the user presses Refresh.
+    scan_on_start: bool = os.getenv("MEDIA_SCAN_ON_START", "0") == "1"
     jellyfin_url: str = os.getenv("JELLYFIN_URL", "")
     jellyfin_public_url: str = os.getenv("JELLYFIN_PUBLIC_URL", "")
     jellyfin_token: str = os.getenv("JELLYFIN_TOKEN", "")

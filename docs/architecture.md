@@ -10,6 +10,7 @@ playback to Jellyfin.
 | Layer | Module | Responsibility |
 |---|---|---|
 | Domain | `media_types` | File classification (image / audio / video / other) and which containers a browser plays as they are |
+| Domain | `refresh` | On-demand refresh workflow for one folder (Template Method) |
 | Domain | `playback` | Playback policy per library (Strategy): direct stream or Jellyfin HLS |
 | Domain | `episode_sync`, `media_metadata`, `imdb_sync` | Titles, episodes and metadata |
 | Adapter: files | `files`, `scanner`, `security` | Directory listing, ranged streaming, thumbnails (ffmpeg / Pillow), archive downloads, catalog scan, path confinement |
@@ -43,3 +44,10 @@ path. Decision record: `decisions/0001-memories-video-playback.md`.
 The web application runs as the unprivileged system user `media-center`; the
 host helper alone writes the media disk, through a socket limited to that
 user's group. Decision record: `decisions/0002-unprivileged-service-user.md`.
+
+## Indexing
+
+Nothing indexes on a timer. `refresh.FolderRefresher` (Template Method) runs
+on the Refresh button for the folder on screen: catalog scan of that subtree,
+Jellyfin refresh and id sync, previews. Decision record:
+`decisions/0003-refresh-on-demand.md`.

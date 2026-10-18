@@ -147,7 +147,8 @@ def video_frame(path: Path, target: Path, size: int) -> None:
     raise FileNotFoundError(f"No video frame in {path.name}")
 
 
-def thumbnail(path: Path, cache_dir: Path, size: int = 480) -> Response:
+def ensure_thumbnail(path: Path, cache_dir: Path, size: int = 480) -> Path:
+    """Create the cached preview of ``path`` if missing and return its file."""
     key = hashlib.sha256(f"{path}:{path.stat().st_mtime_ns}:{size}".encode()).hexdigest()
     target = cache_dir / "thumbs" / f"{key}.jpg"
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -171,6 +172,11 @@ def thumbnail(path: Path, cache_dir: Path, size: int = 480) -> Response:
                 except (OSError, subprocess.SubprocessError):
                     temp.unlink(missing_ok=True)
                     raise HTTPException(422, "Preview unavailable")
+    return target
+
+
+def thumbnail(path: Path, cache_dir: Path, size: int = 480) -> Response:
+    target = ensure_thumbnail(path, cache_dir, size)
     return Response(target.read_bytes(), media_type="image/jpeg", headers={"Cache-Control": "public, max-age=86400"})
 
 
