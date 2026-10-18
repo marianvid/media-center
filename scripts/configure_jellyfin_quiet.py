@@ -23,7 +23,7 @@ DISK_TASKS = {
     "RefreshChapterImages",      # Extract Chapter Images
     "RefreshTrickplayImages",    # Generate Trickplay Images
     "DownloadSubtitles",         # Download missing subtitles
-    "RefreshLyrics",             # Download missing lyrics
+    "DownloadLyrics",            # Download missing lyrics
     "RefreshPeople",             # Refresh People
 }
 
@@ -47,9 +47,12 @@ def main() -> None:
         return
 
     selected = [task for task in tasks if task["Key"] in DISK_TASKS]
-    if not args.backup.exists():
-        args.backup.write_text(json.dumps({task["Key"]: task.get("Triggers", []) for task in selected}, indent=2))
-        print(f"saved previous schedules to {args.backup}")
+    saved = json.loads(args.backup.read_text()) if args.backup.exists() else {}
+    added = {task["Key"]: task.get("Triggers", []) for task in selected if task["Key"] not in saved}
+    if added:
+        # Keep the first saved schedule of each task: later runs see it already emptied.
+        args.backup.write_text(json.dumps({**saved, **added}, indent=2))
+        print(f"saved previous schedules of {', '.join(sorted(added))} to {args.backup}")
     for task in selected:
         if task.get("Triggers"):
             request(url, token, f"/ScheduledTasks/{task['Id']}/Triggers", method="POST", body=[])
