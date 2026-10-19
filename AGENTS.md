@@ -37,3 +37,14 @@
   by the private operational context; local checks do not replace it.
 - Run `scripts/check-public-tree.sh staged` before committing and
   `scripts/check-public-tree.sh history` before publishing.
+
+## Working with the owner (binding)
+
+- Before starting any work beyond reading what is needed to understand the
+  request, tell the owner in plain words what you intend to do and why
+  (a short list). Answer a question first; start work only when needed.
+- While working, report a short status at each step that takes noticeable
+  time: what is done, what is next.
+- At the end, say what was done and what is left.
+- This never replaces approvals: operations that need the owner's approval
+  still wait for it.
